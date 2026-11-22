@@ -96,10 +96,6 @@
     return saida;
   }
 
-  /**
-   * linhas: array de arrays de texto. A primeira linha é o cabeçalho.
-   * larguras: largura de cada coluna.
-   */
   function criar(nomePlanilha, linhas, larguras) {
     const nomeAba = esc(String(nomePlanilha).replace(/[\\/?*[\]:]/g, " ").slice(0, 31));
     const cols = (larguras || [])

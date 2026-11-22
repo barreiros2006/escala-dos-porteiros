@@ -3,6 +3,7 @@
 
   /* ===== Configuração ===== */
   const POSTOS = ["Porta Frente", "Átrio", "Porta Meio", "Banheiro"];
+  const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const SENHA_ADM = "2580";
   const CHAVE_LOCAL = "ccb-escala-porteiros-v6";
   const CHAVES_ANTIGAS = ["ccb-porteiros-v3", "ccb-escala-porteiros-v2", "ccb-escala-porteiros-v1"];
@@ -13,9 +14,8 @@
 
   const PADRAO = {
     app: "Escala de Porteiros CCB",
-    versao: 6,
+    versao: 7,
     atualizadoEm: null,
-    anoPadrao: 2027,
     grupos: [
       { id: 1, nome: "Grupo 1", porteiros: ["Rodrigo", "Cazé", "Willian", "Claudeci"] },
       { id: 2, nome: "Grupo 2", porteiros: ["", "", "", ""] },
@@ -27,6 +27,7 @@
   const $ = (id) => document.getElementById(id);
   const ui = {
     ano: $("filtroAno"),
+    mes: $("filtroMes"),
     grupo: $("filtroGrupo"),
     nome: $("filtroNome"),
     data: $("filtroData"),
@@ -87,6 +88,13 @@
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   }
 
+  // Sempre posiciona o app no ano e mês atuais.
+  function irParaMesAtual() {
+    const hoje = new Date();
+    ui.ano.value = hoje.getFullYear();
+    ui.mes.value = String(hoje.getMonth());
+  }
+
   function anoSelecionado() {
     const n = parseInt(ui.ano.value, 10);
     return n >= 2020 && n <= 2100 ? n : new Date().getFullYear();
@@ -123,12 +131,10 @@
         if (!Array.isArray(p)) throw new Error("formato");
         return { id: i + 1, nome: `Grupo ${i + 1}`, porteiros: [0, 1, 2, 3].map((k) => limparNome(p[k])) };
       });
-      const ano = Number(obj.anoPadrao || obj.anoSelecionado || obj.ano || obj.selectedYear) || PADRAO.anoPadrao;
       return {
         app: PADRAO.app,
         versao: PADRAO.versao,
         atualizadoEm: obj.atualizadoEm || obj.exportadoEm || obj.exportedAt || null,
-        anoPadrao: ano,
         grupos,
       };
     } catch {
@@ -192,8 +198,7 @@
     return ((semanas % 4) + 4) % 4;
   }
 
-  // A cada domingo, cada porteiro avança uma posição:
-  // Porta Frente → Banheiro → Porta Meio → Átrio → Porta Frente...
+  // A cada domingo, cada porteiro muda de posição.
   function montarEscala(ano) {
     const linhas = [];
     domingosDoAno(ano).forEach((data) => {
@@ -207,10 +212,12 @@
   }
 
   function escalaFiltrada() {
+    const mes = ui.mes.value;
     const grupo = ui.grupo.value;
     const nome = semAcento(ui.nome.value);
     const data = ui.data.value;
     return montarEscala(anoSelecionado()).filter((l) =>
+      (mes === "" || String(l.data.getMonth()) === mes) &&
       (!grupo || String(l.grupo.id) === grupo) &&
       (!nome || l.postos.some((p) => semAcento(p.nome).includes(nome))) &&
       (!data || chaveData(l.data) === data)
@@ -222,7 +229,9 @@
     const lista = escalaFiltrada();
     const nome = semAcento(ui.nome.value);
 
-    ui.titulo.textContent = `Escala de ${ano}`;
+    ui.titulo.textContent = ui.mes.value === ""
+      ? `Escala de ${ano}`
+      : `Escala de ${MESES[Number(ui.mes.value)]} de ${ano}`;
     ui.contador.textContent = `${lista.length} ${lista.length === 1 ? "escala encontrada" : "escalas encontradas"}`;
     atualizarOrigem();
 
@@ -320,7 +329,6 @@
 
     dados.grupos = novos;
     dados.atualizadoEm = new Date().toISOString();
-    dados.anoPadrao = anoSelecionado();
     salvarLocal();
     origem = "local";
     renderAdm();
@@ -330,11 +338,7 @@
 
   /* ===== Exportação e importação ===== */
   function exportarJson() {
-    const payload = {
-      ...dados,
-      atualizadoEm: dados.atualizadoEm || new Date().toISOString(),
-      anoPadrao: anoSelecionado(),
-    };
+    const payload = { ...dados, atualizadoEm: dados.atualizadoEm || new Date().toISOString() };
     baixar(JSON.stringify(payload, null, 2), "application/json", "escala.json");
     aviso("Arquivo escala.json gerado. Substitua o escala.json da pasta do app no GitHub.", 6000);
   }
@@ -348,8 +352,9 @@
     const linhas = [["Data", "Grupo", ...POSTOS]];
     lista.forEach((l) => linhas.push([dataBR(l.data), l.grupo.nome, ...l.postos.map((p) => p.nome || "Não definido")]));
     const ano = anoSelecionado();
-    const bytes = window.EscalaXlsx.criar(`Escala ${ano}`, linhas, [12, 10, 20, 20, 20, 20]);
-    baixar(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", `escala-porteiros-${ano}.xlsx`);
+    const sufixo = ui.mes.value === "" ? `${ano}` : `${String(Number(ui.mes.value) + 1).padStart(2, "0")}-${ano}`;
+    const bytes = window.EscalaXlsx.criar(`Escala ${sufixo}`, linhas, [12, 10, 20, 20, 20, 20]);
+    baixar(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", `escala-porteiros-${sufixo}.xlsx`);
   }
 
   function importarJson(ev) {
@@ -368,7 +373,6 @@
       dados.atualizadoEm = new Date().toISOString();
       salvarLocal();
       origem = "local";
-      ui.ano.value = dados.anoPadrao;
       renderAdm();
       render();
       aviso("JSON importado com sucesso.");
@@ -379,12 +383,14 @@
   /* ===== Eventos ===== */
   function ligarEventos() {
     ui.ano.addEventListener("input", render);
+    ui.mes.addEventListener("change", render);
     ui.grupo.addEventListener("change", render);
     ui.nome.addEventListener("input", render);
     ui.data.addEventListener("change", () => {
       if (ui.data.value) {
-        const anoData = Number(ui.data.value.slice(0, 4));
-        if (anoData && anoData !== anoSelecionado()) ui.ano.value = anoData;
+        // Ajusta ano e mês para a data escolhida.
+        ui.ano.value = Number(ui.data.value.slice(0, 4));
+        ui.mes.value = String(Number(ui.data.value.slice(5, 7)) - 1);
       }
       render();
     });
@@ -393,6 +399,7 @@
       ui.grupo.value = "";
       ui.nome.value = "";
       ui.data.value = "";
+      irParaMesAtual();
       render();
     });
 
@@ -465,8 +472,8 @@
   /* ===== Início ===== */
   async function iniciar() {
     ligarEventos();
-    ui.ano.value = PADRAO.anoPadrao;
-    render(); // mostra algo imediatamente
+    irParaMesAtual();
+    render(); // mostra o mês atual imediatamente
 
     const local = lerLocal();
     const arquivo = await lerArquivoSite();
@@ -482,7 +489,6 @@
       dados = clonar(PADRAO); origem = "padrao";
     }
 
-    ui.ano.value = dados.anoPadrao || new Date().getFullYear();
     render();
     if (sessionStorage.getItem("ccb-adm") === "1") entrarAdm();
     registrarServiceWorker();

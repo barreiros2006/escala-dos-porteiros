@@ -1,13 +1,13 @@
 /* Service Worker - Escala de Porteiros CCB
    Estratégia "rede primeiro": sempre busca a versão mais nova no GitHub
    e usa o cache somente quando estiver sem internet. */
-const CACHE = "escala-ccb-v6";
+const CACHE = "escala-ccb-v7";
 const ARQUIVOS = [
   "./",
   "./index.html",
-  "./style.css?v=6",
-  "./xlsx.js?v=6",
-  "./app.js?v=6",
+  "./style.css?v=7",
+  "./xlsx.js?v=7",
+  "./app.js?v=7",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
