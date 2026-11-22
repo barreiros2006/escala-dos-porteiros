@@ -1,31 +1,11 @@
 {
+  "app": "Escala de Porteiros CCB",
+  "versao": 6,
+  "atualizadoEm": "2026-11-22T00:00:00.000Z",
+  "anoPadrao": 2027,
   "grupos": [
-    {
-      "nome": "Grupo 1",
-      "p": [
-        "Rodrigo",
-        "Cazé",
-        "Willian",
-        "Claudeci"
-      ]
-    },
-    {
-      "nome": "Grupo 2",
-      "p": [
-        "Porteiro 1",
-        "Porteiro 2",
-        "Porteiro 3",
-        "Porteiro 4"
-      ]
-    },
-    {
-      "nome": "Grupo 3",
-      "p": [
-        "Porteiro 1",
-        "Porteiro 2",
-        "Porteiro 3",
-        "Porteiro 4"
-      ]
-    }
+    { "id": 1, "nome": "Grupo 1", "porteiros": ["Rodrigo", "Cazé", "Willian", "Claudeci"] },
+    { "id": 2, "nome": "Grupo 2", "porteiros": ["", "", "", ""] },
+    { "id": 3, "nome": "Grupo 3", "porteiros": ["", "", "", ""] }
   ]
 }

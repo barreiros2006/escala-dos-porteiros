@@ -1,3 +1,492 @@
-"use strict";
-const ano=document.getElementById("ano"),grupo=document.getElementById("grupo"),nome=document.getElementById("nome"),data=document.getElementById("data"),adm=document.getElementById("adm"),login=document.getElementById("login"),senha=document.getElementById("senha"),erro=document.getElementById("erro"),cancelar=document.getElementById("cancelar"),admin=document.getElementById("admin"),impLabel=document.getElementById("impLabel"),editores=document.getElementById("editores"),salvar=document.getElementById("salvar"),sair=document.getElementById("sair"),json=document.getElementById("json"),excel=document.getElementById("excel"),imp=document.getElementById("imp"),titulo=document.getElementById("titulo"),contagem=document.getElementById("contagem"),lista=document.getElementById("lista");
-const P=["Porta Frente","Átrio","Porta Meio","Banheiro"],K="ccb-porteiros-v3",D={grupos:[{nome:"Grupo 1",p:["Rodrigo","Cazé","Willian","Claudeci"]},{nome:"Grupo 2",p:["Porteiro 1","Porteiro 2","Porteiro 3","Porteiro 4"]},{nome:"Grupo 3",p:["Porteiro 1","Porteiro 2","Porteiro 3","Porteiro 4"]}]};let d;try{d=JSON.parse(localStorage.getItem(K))||D}catch{d=D}const $=x=>document.getElementById(x),esc=x=>String(x).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));ano.value=new Date().getFullYear();function domingos(a){let r=[],x=new Date(a,0,1,12);while(x.getDay())x.setDate(x.getDate()+1);while(x.getFullYear()==a){r.push(new Date(x));x.setDate(x.getDate()+7)}return r}function key(x){return x.toISOString().slice(0,10)}function linhas(){let r=[];domingos(+ano.value).forEach((dt,w)=>d.grupos.forEach(g=>{let a=P.map((posto,i)=>({posto,nome:g.p[(i+w)%4]}));if((!grupo.value||g.nome==grupo.value)&&(!nome.value||a.some(v=>v.nome.toLowerCase().includes(nome.value.toLowerCase())))&&(!data.value||key(dt)==data.value))r.push({dt,g,a})}));return r}function render(){let r=linhas();titulo.textContent=`Escala de ${ano.value}`;contagem.textContent=`${r.length} escalas encontradas`;lista.innerHTML=r.map(x=>`<article class="card"><div class="head"><h3>${x.g.nome}</h3><p>${x.dt.toLocaleDateString('pt-BR')}</p></div><div class="postos">${x.a.map(v=>`<div class="posto"><small>${v.posto}</small><b>${esc(v.nome)}</b></div>`).join('')}</div></article>`).join('')}function edit(){editores.innerHTML=d.grupos.map((g,gi)=>`<div class="grupoEdit"><h3>${g.nome}</h3>${g.p.map((n,pi)=>`<label>${P[pi]}<input data-g="${gi}" data-p="${pi}" value="${esc(n)}"></label>`).join('')}</div>`).join('')}function dl(c,t,n){let u=URL.createObjectURL(new Blob([c],{type:t})),a=document.createElement('a');a.href=u;a.download=n;a.click();URL.revokeObjectURL(u)}[ano,grupo,nome,data].forEach(e=>e.oninput=render);adm.onclick=()=>{login.classList.remove('hide');senha.focus()};cancelar.onclick=()=>login.classList.add('hide');login.querySelector('form').onsubmit=e=>{e.preventDefault();if(senha.value==='2580'){login.classList.add('hide');admin.classList.remove('hide');impLabel.classList.remove('hide');edit();senha.value=''}else erro.textContent='Senha incorreta'};sair.onclick=()=>{admin.classList.add('hide');impLabel.classList.add('hide')};salvar.onclick=()=>{[...editores.querySelectorAll('input')].forEach(x=>d.grupos[+x.dataset.g].p[+x.dataset.p]=x.value.trim()||'Não definido');localStorage.setItem(K,JSON.stringify(d));render();alert('Alterações salvas.')};json.onclick=()=>dl(JSON.stringify({...d,ano:+ano.value},null,2),'application/json',`escala-${ano.value}.json`);excel.onclick=()=>{let rows=linhas().flatMap(x=>x.a.map(v=>[x.dt.toLocaleDateString('pt-BR'),x.g.nome,v.posto,v.nome]));let csv=['Data;Grupo;Posto;Porteiro',...rows.map(r=>r.join(';'))].join('\n');dl('﻿'+csv,'text/csv;charset=utf-8',`escala-${ano.value}.csv`)};imp.onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.grupos||x.grupos.length!==3)throw 0;d=x;localStorage.setItem(K,JSON.stringify(d));if(x.ano)ano.value=x.ano;edit();render()}catch{alert('JSON inválido')}};r.readAsText(f)};if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js');render();
+(function () {
+  "use strict";
+
+  /* ===== Configuração ===== */
+  const POSTOS = ["Porta Frente", "Átrio", "Porta Meio", "Banheiro"];
+  const SENHA_ADM = "2580";
+  const CHAVE_LOCAL = "ccb-escala-porteiros-v6";
+  const CHAVES_ANTIGAS = ["ccb-porteiros-v3", "ccb-escala-porteiros-v2", "ccb-escala-porteiros-v1"];
+  // Domingo de referência do rodízio: neste dia cada grupo usa a ordem cadastrada.
+  // O rodízio continua sem interrupção de um ano para o outro.
+  const DOMINGO_REFERENCIA = new Date(2027, 0, 3, 12);
+  const UM_DIA = 24 * 60 * 60 * 1000;
+
+  const PADRAO = {
+    app: "Escala de Porteiros CCB",
+    versao: 6,
+    atualizadoEm: null,
+    anoPadrao: 2027,
+    grupos: [
+      { id: 1, nome: "Grupo 1", porteiros: ["Rodrigo", "Cazé", "Willian", "Claudeci"] },
+      { id: 2, nome: "Grupo 2", porteiros: ["", "", "", ""] },
+      { id: 3, nome: "Grupo 3", porteiros: ["", "", "", ""] },
+    ],
+  };
+
+  /* ===== Elementos ===== */
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    ano: $("filtroAno"),
+    grupo: $("filtroGrupo"),
+    nome: $("filtroNome"),
+    data: $("filtroData"),
+    btnLimpar: $("btnLimpar"),
+    btnExcel: $("btnExcel"),
+    btnJson: $("btnJson"),
+    lblImportar: $("lblImportar"),
+    inputImportar: $("inputImportar"),
+    btnAdm: $("btnAdm"),
+    btnSair: $("btnSair"),
+    btnInstalar: $("btnInstalar"),
+    painelAdm: $("painelAdm"),
+    gruposAdm: $("gruposAdm"),
+    btnSalvar: $("btnSalvar"),
+    btnDescartar: $("btnDescartar"),
+    titulo: $("tituloEscala"),
+    contador: $("contador"),
+    origem: $("origemDados"),
+    lista: $("listaEscala"),
+    vazio: $("vazio"),
+    modal: $("modalLogin"),
+    form: $("formLogin"),
+    senha: $("inputSenha"),
+    erro: $("erroLogin"),
+    btnCancelarLogin: $("btnCancelarLogin"),
+    toast: $("toast"),
+  };
+
+  let dados = clonar(PADRAO);
+  let origem = "padrao";
+  let modoAdm = false;
+  let promptInstalacao = null;
+
+  /* ===== Utilitários ===== */
+  function clonar(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
+  function escHtml(v) {
+    return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function semAcento(v) {
+    return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  }
+
+  function limparNome(v) {
+    const t = typeof v === "string" ? v.trim() : "";
+    if (!t || t === "Não definido") return "";
+    return t.slice(0, 60);
+  }
+
+  function chaveData(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function dataBR(d) {
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  }
+
+  function anoSelecionado() {
+    const n = parseInt(ui.ano.value, 10);
+    return n >= 2020 && n <= 2100 ? n : new Date().getFullYear();
+  }
+
+  function aviso(msg, tempo = 3500) {
+    ui.toast.textContent = msg;
+    ui.toast.classList.remove("oculto");
+    clearTimeout(aviso.t);
+    aviso.t = setTimeout(() => ui.toast.classList.add("oculto"), tempo);
+  }
+
+  function baixar(conteudo, tipo, nomeArquivo) {
+    const blob = new Blob([conteudo], { type: tipo });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /* ===== Dados ===== */
+  // Aceita o formato atual e os formatos das versões anteriores.
+  function normalizar(obj) {
+    try {
+      if (!obj || typeof obj !== "object") return null;
+      const lista = obj.grupos || obj.groups;
+      if (!Array.isArray(lista) || lista.length !== 3) return null;
+      const grupos = lista.map((g, i) => {
+        const p = (g && (g.porteiros || g.p || g.members)) || [];
+        if (!Array.isArray(p)) throw new Error("formato");
+        return { id: i + 1, nome: `Grupo ${i + 1}`, porteiros: [0, 1, 2, 3].map((k) => limparNome(p[k])) };
+      });
+      const ano = Number(obj.anoPadrao || obj.anoSelecionado || obj.ano || obj.selectedYear) || PADRAO.anoPadrao;
+      return {
+        app: PADRAO.app,
+        versao: PADRAO.versao,
+        atualizadoEm: obj.atualizadoEm || obj.exportadoEm || obj.exportedAt || null,
+        anoPadrao: ano,
+        grupos,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function lerLocal() {
+    for (const chave of [CHAVE_LOCAL, ...CHAVES_ANTIGAS]) {
+      try {
+        const v = normalizar(JSON.parse(localStorage.getItem(chave)));
+        if (v) return v;
+      } catch { /* ignora */ }
+    }
+    return null;
+  }
+
+  async function lerArquivoSite() {
+    try {
+      const r = await fetch(`escala.json?t=${Date.now()}`, { cache: "no-store" });
+      if (!r.ok) return null;
+      return normalizar(await r.json());
+    } catch {
+      return null;
+    }
+  }
+
+  const tempo = (d) => Date.parse(d && d.atualizadoEm) || 0;
+
+  function salvarLocal() {
+    try {
+      localStorage.setItem(CHAVE_LOCAL, JSON.stringify(dados));
+    } catch {
+      aviso("Não foi possível salvar neste navegador.");
+    }
+  }
+
+  function atualizarOrigem() {
+    const textos = {
+      arquivo: "Dados: escala.json do site",
+      local: "Dados: alterações salvas neste navegador",
+      padrao: "Dados: cadastro inicial do app",
+    };
+    ui.origem.textContent = textos[origem] || "";
+  }
+
+  /* ===== Escala ===== */
+  function domingosDoAno(ano) {
+    const lista = [];
+    const d = new Date(ano, 0, 1, 12);
+    while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
+    while (d.getFullYear() === ano) {
+      lista.push(new Date(d));
+      d.setDate(d.getDate() + 7);
+    }
+    return lista;
+  }
+
+  function deslocamento(data) {
+    const semanas = Math.round((data - DOMINGO_REFERENCIA) / (7 * UM_DIA));
+    return ((semanas % 4) + 4) % 4;
+  }
+
+  // A cada domingo, cada porteiro avança uma posição:
+  // Porta Frente → Banheiro → Porta Meio → Átrio → Porta Frente...
+  function montarEscala(ano) {
+    const linhas = [];
+    domingosDoAno(ano).forEach((data) => {
+      const s = deslocamento(data);
+      dados.grupos.forEach((g) => {
+        const postos = POSTOS.map((posto, i) => ({ posto, nome: g.porteiros[(i + s) % 4] || "" }));
+        linhas.push({ data, grupo: g, postos });
+      });
+    });
+    return linhas;
+  }
+
+  function escalaFiltrada() {
+    const grupo = ui.grupo.value;
+    const nome = semAcento(ui.nome.value);
+    const data = ui.data.value;
+    return montarEscala(anoSelecionado()).filter((l) =>
+      (!grupo || String(l.grupo.id) === grupo) &&
+      (!nome || l.postos.some((p) => semAcento(p.nome).includes(nome))) &&
+      (!data || chaveData(l.data) === data)
+    );
+  }
+
+  function render() {
+    const ano = anoSelecionado();
+    const lista = escalaFiltrada();
+    const nome = semAcento(ui.nome.value);
+
+    ui.titulo.textContent = `Escala de ${ano}`;
+    ui.contador.textContent = `${lista.length} ${lista.length === 1 ? "escala encontrada" : "escalas encontradas"}`;
+    atualizarOrigem();
+
+    ui.lista.innerHTML = lista.map((l) => `
+      <article class="card">
+        <div class="card-topo"><h3>${escHtml(l.grupo.nome)}</h3><span>${dataBR(l.data)}</span></div>
+        <div class="postos">
+          ${l.postos.map((p) => {
+            const classes = ["posto"];
+            if (!p.nome) classes.push("vago");
+            if (nome && p.nome && semAcento(p.nome).includes(nome)) classes.push("destaque");
+            return `<div class="${classes.join(" ")}"><small>${escHtml(p.posto)}</small><strong>${p.nome ? escHtml(p.nome) : "Não definido"}</strong></div>`;
+          }).join("")}
+        </div>
+      </article>`).join("");
+
+    if (lista.length) {
+      ui.vazio.classList.add("oculto");
+    } else {
+      let msg = "Nenhuma escala encontrada com os filtros informados.";
+      if (ui.data.value) {
+        const d = new Date(`${ui.data.value}T12:00:00`);
+        if (d.getDay() !== 0) msg = "A data selecionada não é um domingo. Escolha um domingo.";
+      }
+      ui.vazio.textContent = msg;
+      ui.vazio.classList.remove("oculto");
+    }
+  }
+
+  /* ===== ADM ===== */
+  function renderAdm() {
+    ui.gruposAdm.innerHTML = dados.grupos.map((g, gi) => `
+      <div class="grupo-adm">
+        <h3>${escHtml(g.nome)}</h3>
+        <small>Ordem inicial (domingo ${dataBR(DOMINGO_REFERENCIA)})</small>
+        ${g.porteiros.map((nome, pi) => `
+          <div class="linha-porteiro">
+            <label>${POSTOS[pi]}
+              <input type="text" maxlength="60" data-g="${gi}" data-p="${pi}" value="${escHtml(nome)}" placeholder="Adicionar porteiro">
+            </label>
+            <button type="button" class="btn perigo" data-excluir="${gi}-${pi}" title="Excluir porteiro">Excluir</button>
+          </div>`).join("")}
+      </div>`).join("");
+  }
+
+  function entrarAdm() {
+    modoAdm = true;
+    sessionStorage.setItem("ccb-adm", "1");
+    ui.painelAdm.classList.remove("oculto");
+    ui.lblImportar.classList.remove("oculto");
+    ui.btnSair.classList.remove("oculto");
+    ui.btnAdm.textContent = "ADM ativo";
+    renderAdm();
+  }
+
+  function sairAdm() {
+    modoAdm = false;
+    sessionStorage.removeItem("ccb-adm");
+    ui.painelAdm.classList.add("oculto");
+    ui.lblImportar.classList.add("oculto");
+    ui.btnSair.classList.add("oculto");
+    ui.btnAdm.textContent = "Modo ADM";
+  }
+
+  function abrirLogin() {
+    if (modoAdm) {
+      ui.painelAdm.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    ui.erro.textContent = "";
+    ui.senha.value = "";
+    ui.modal.classList.remove("oculto");
+    setTimeout(() => ui.senha.focus(), 50);
+  }
+
+  function fecharLogin() {
+    ui.modal.classList.add("oculto");
+    ui.erro.textContent = "";
+    ui.senha.value = "";
+  }
+
+  function salvarAdm() {
+    const novos = clonar(dados.grupos);
+    ui.gruposAdm.querySelectorAll("input[data-g]").forEach((inp) => {
+      novos[Number(inp.dataset.g)].porteiros[Number(inp.dataset.p)] = limparNome(inp.value);
+    });
+
+    for (const g of novos) {
+      const nomes = g.porteiros.filter(Boolean).map(semAcento);
+      if (new Set(nomes).size !== nomes.length) {
+        aviso(`${g.nome}: há nomes repetidos no mesmo grupo.`);
+        return;
+      }
+    }
+
+    dados.grupos = novos;
+    dados.atualizadoEm = new Date().toISOString();
+    dados.anoPadrao = anoSelecionado();
+    salvarLocal();
+    origem = "local";
+    renderAdm();
+    render();
+    aviso("Alterações salvas. Exporte o JSON e envie o escala.json ao GitHub para valer para todos.", 6000);
+  }
+
+  /* ===== Exportação e importação ===== */
+  function exportarJson() {
+    const payload = {
+      ...dados,
+      atualizadoEm: dados.atualizadoEm || new Date().toISOString(),
+      anoPadrao: anoSelecionado(),
+    };
+    baixar(JSON.stringify(payload, null, 2), "application/json", "escala.json");
+    aviso("Arquivo escala.json gerado. Substitua o escala.json da pasta do app no GitHub.", 6000);
+  }
+
+  function exportarExcel() {
+    const lista = escalaFiltrada();
+    if (!lista.length) {
+      aviso("Não há escala para exportar com os filtros atuais.");
+      return;
+    }
+    const linhas = [["Data", "Grupo", ...POSTOS]];
+    lista.forEach((l) => linhas.push([dataBR(l.data), l.grupo.nome, ...l.postos.map((p) => p.nome || "Não definido")]));
+    const ano = anoSelecionado();
+    const bytes = window.EscalaXlsx.criar(`Escala ${ano}`, linhas, [12, 10, 20, 20, 20, 20]);
+    baixar(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", `escala-porteiros-${ano}.xlsx`);
+  }
+
+  function importarJson(ev) {
+    const arquivo = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      let novo = null;
+      try { novo = normalizar(JSON.parse(String(leitor.result))); } catch { novo = null; }
+      if (!novo) {
+        aviso("JSON inválido ou incompatível com o app.");
+        return;
+      }
+      dados = novo;
+      dados.atualizadoEm = new Date().toISOString();
+      salvarLocal();
+      origem = "local";
+      ui.ano.value = dados.anoPadrao;
+      renderAdm();
+      render();
+      aviso("JSON importado com sucesso.");
+    };
+    leitor.readAsText(arquivo);
+  }
+
+  /* ===== Eventos ===== */
+  function ligarEventos() {
+    ui.ano.addEventListener("input", render);
+    ui.grupo.addEventListener("change", render);
+    ui.nome.addEventListener("input", render);
+    ui.data.addEventListener("change", () => {
+      if (ui.data.value) {
+        const anoData = Number(ui.data.value.slice(0, 4));
+        if (anoData && anoData !== anoSelecionado()) ui.ano.value = anoData;
+      }
+      render();
+    });
+
+    ui.btnLimpar.addEventListener("click", () => {
+      ui.grupo.value = "";
+      ui.nome.value = "";
+      ui.data.value = "";
+      render();
+    });
+
+    ui.btnExcel.addEventListener("click", exportarExcel);
+    ui.btnJson.addEventListener("click", exportarJson);
+    ui.inputImportar.addEventListener("change", importarJson);
+
+    ui.btnAdm.addEventListener("click", abrirLogin);
+    ui.btnSair.addEventListener("click", sairAdm);
+    ui.btnCancelarLogin.addEventListener("click", fecharLogin);
+    ui.modal.addEventListener("click", (e) => { if (e.target === ui.modal) fecharLogin(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharLogin(); });
+
+    ui.form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (ui.senha.value.trim() === SENHA_ADM) {
+        fecharLogin();
+        entrarAdm();
+        aviso("Modo ADM ativado.");
+      } else {
+        ui.erro.textContent = "Senha incorreta.";
+        ui.senha.select();
+      }
+    });
+
+    ui.gruposAdm.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-excluir]");
+      if (!btn) return;
+      const [g, p] = btn.dataset.excluir.split("-");
+      const inp = ui.gruposAdm.querySelector(`input[data-g="${g}"][data-p="${p}"]`);
+      if (inp && inp.value.trim() && confirm(`Excluir "${inp.value.trim()}"? Clique em Salvar alterações para confirmar.`)) {
+        inp.value = "";
+        inp.focus();
+      }
+    });
+
+    ui.btnSalvar.addEventListener("click", salvarAdm);
+    ui.btnDescartar.addEventListener("click", () => { renderAdm(); aviso("Alterações descartadas."); });
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      promptInstalacao = e;
+      ui.btnInstalar.classList.remove("oculto");
+    });
+    ui.btnInstalar.addEventListener("click", async () => {
+      if (!promptInstalacao) return;
+      promptInstalacao.prompt();
+      await promptInstalacao.userChoice;
+      promptInstalacao = null;
+      ui.btnInstalar.classList.add("oculto");
+    });
+  }
+
+  /* ===== Service Worker ===== */
+  function registrarServiceWorker() {
+    if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+    const tinhaControlador = !!navigator.serviceWorker.controller;
+    let recarregou = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (tinhaControlador && !recarregou) {
+        recarregou = true;
+        location.reload();
+      }
+    });
+    navigator.serviceWorker.register("service-worker.js", { updateViaCache: "none" })
+      .then((reg) => reg.update())
+      .catch(() => { /* o app funciona mesmo sem service worker */ });
+  }
+
+  /* ===== Início ===== */
+  async function iniciar() {
+    ligarEventos();
+    ui.ano.value = PADRAO.anoPadrao;
+    render(); // mostra algo imediatamente
+
+    const local = lerLocal();
+    const arquivo = await lerArquivoSite();
+
+    if (local && arquivo) {
+      if (tempo(local) > tempo(arquivo)) { dados = local; origem = "local"; }
+      else { dados = arquivo; origem = "arquivo"; }
+    } else if (arquivo) {
+      dados = arquivo; origem = "arquivo";
+    } else if (local) {
+      dados = local; origem = "local";
+    } else {
+      dados = clonar(PADRAO); origem = "padrao";
+    }
+
+    ui.ano.value = dados.anoPadrao || new Date().getFullYear();
+    render();
+    if (sessionStorage.getItem("ccb-adm") === "1") entrarAdm();
+    registrarServiceWorker();
+  }
+
+  iniciar();
+})();
