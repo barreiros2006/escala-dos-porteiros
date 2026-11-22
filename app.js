@@ -2,7 +2,7 @@
   "use strict";
 
   /* ===== Configuração ===== */
-  const POSTOS = ["Porta Frente", "Átrio", "Porta Meio", "Banheiro"];
+  const POSTOS = ["Pedido de Oração", "Átrio", "Porta do Meio", "Banheiro"];
   const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const SENHA_ADM = "2580";
   const CHAVE_LOCAL = "ccb-escala-porteiros-v6";
@@ -14,10 +14,10 @@
 
   const PADRAO = {
     app: "Escala de Porteiros CCB",
-    versao: 7,
+    versao: 10,
     atualizadoEm: null,
     grupos: [
-      { id: 1, nome: "Grupo 1", porteiros: ["Rodrigo", "Cazé", "Willian", "Claudeci"] },
+      { id: 1, nome: "Grupo 1", porteiros: ["", "", "", ""] },
       { id: 2, nome: "Grupo 2", porteiros: ["", "", "", ""] },
       { id: 3, nome: "Grupo 3", porteiros: ["", "", "", ""] },
     ],
@@ -46,7 +46,6 @@
     btnLimpar: $("btnLimpar"),
     btnExcel: $("btnExcel"),
     btnJson: $("btnJson"),
-    lblImportar: $("lblImportar"),
     inputImportar: $("inputImportar"),
     btnAdm: $("btnAdm"),
     btnSair: $("btnSair"),
@@ -86,8 +85,20 @@
     return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   }
 
+  // Corrige nomes com acento corrompido (ex.: "CasÃ©" -> "Casé").
+  function corrigirAcento(t) {
+    if (!/[ÃÂ]/.test(t)) return t;
+    try {
+      const bytes = Uint8Array.from(t, (c) => c.charCodeAt(0) & 0xff);
+      const r = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return r;
+    } catch {
+      return t;
+    }
+  }
+
   function limparNome(v) {
-    const t = typeof v === "string" ? v.trim() : "";
+    const t = typeof v === "string" ? corrigirAcento(v.trim()) : "";
     if (!t || t === "Não definido") return "";
     return t.slice(0, 60);
   }
@@ -168,7 +179,9 @@
     try {
       const r = await fetch(`escala.json?t=${Date.now()}`, { cache: "no-store" });
       if (!r.ok) return null;
-      return normalizar(await r.json());
+      // Lê sempre como UTF-8 para preservar os acentos.
+      const texto = new TextDecoder("utf-8").decode(await r.arrayBuffer()).replace(/^\uFEFF/, "");
+      return normalizar(JSON.parse(texto));
     } catch {
       return null;
     }
@@ -349,7 +362,8 @@
   /* ===== Exportação e importação ===== */
   function exportarJson() {
     const payload = { ...dados, atualizadoEm: dados.atualizadoEm || new Date().toISOString() };
-    baixar(JSON.stringify(payload, null, 2), "application/json", "escala.json");
+    // UTF-8 explícito para manter os acentos corretos no GitHub.
+    baixar(JSON.stringify(payload, null, 2), "application/json;charset=utf-8", "escala.json");
     aviso("Arquivo escala.json gerado. Substitua o escala.json da pasta do app no GitHub.", 6000);
   }
 
@@ -374,7 +388,7 @@
     const leitor = new FileReader();
     leitor.onload = () => {
       let novo = null;
-      try { novo = normalizar(JSON.parse(String(leitor.result))); } catch { novo = null; }
+      try { novo = normalizar(JSON.parse(String(leitor.result).replace(/^\uFEFF/, ""))); } catch { novo = null; }
       if (!novo) {
         aviso("JSON inválido ou incompatível com o app.");
         return;
@@ -387,7 +401,7 @@
       render();
       aviso("JSON importado com sucesso.");
     };
-    leitor.readAsText(arquivo);
+    leitor.readAsText(arquivo, "utf-8");
   }
 
   /* ===== Eventos ===== */

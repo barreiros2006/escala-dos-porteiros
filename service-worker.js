@@ -1,20 +1,19 @@
 /* Service Worker - Escala de Porteiros CCB
    Rede primeiro, sem usar o cache HTTP do navegador.
    O cache local só é usado quando estiver sem internet. */
-const CACHE = "escala-ccb-v9";
+const CACHE = "escala-ccb-v12";
 const ARQUIVOS = [
   "./",
   "./index.html",
-  "./style.css?v=9",
-  "./xlsx.js?v=9",
-  "./app.js?v=9",
+  "./style.css?v=12",
+  "./xlsx.js?v=12",
+  "./app.js?v=12",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
 ];
 
 self.addEventListener("install", (e) => {
-  // Se algum arquivo faltar, os demais continuam sendo guardados.
   e.waitUntil(
     caches.open(CACHE)
       .then((c) => Promise.allSettled(ARQUIVOS.map((a) => c.add(new Request(a, { cache: "reload" })))))
