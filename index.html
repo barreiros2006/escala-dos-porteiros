@@ -1,0 +1,250 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Download, Eye, Filter, Lock, LogOut, Pencil, Plus, Save, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+const POSTS = ["Porta Frente", "Átrio", "Porta Meio", "Banheiro"];
+const STORAGE_KEY = "ccb-escala-porteiros-v1";
+
+const initialData = {
+  congregation: "Congregação Cristã no Brasil",
+  groups: [
+    { id: 1, name: "Grupo 1", members: ["Rodrigo", "Cazé", "Willian", "Claudeci"] },
+    { id: 2, name: "Grupo 2", members: ["Porteiro 1", "Porteiro 2", "Porteiro 3", "Porteiro 4"] },
+    { id: 3, name: "Grupo 3", members: ["Porteiro 1", "Porteiro 2", "Porteiro 3", "Porteiro 4"] },
+  ],
+};
+
+function getSundays(year) {
+  const dates = [];
+  const d = new Date(year, 0, 1, 12);
+  while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
+  while (d.getFullYear() === year) {
+    dates.push(new Date(d));
+    d.setDate(d.getDate() + 7);
+  }
+  return dates;
+}
+
+function dateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatDate(date) {
+  return new Intl.DateTimeFormat("pt-BR").format(date);
+}
+
+function escapeXml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function downloadBlob(content, type, filename) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function App() {
+  const [data, setData] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || initialData;
+    } catch {
+      return initialData;
+    }
+  });
+  const [year, setYear] = useState(2027);
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [nameFilter, setNameFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [admin, setAdmin] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [draftMembers, setDraftMembers] = useState(["", "", "", ""]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [data]);
+
+  const sundays = useMemo(() => getSundays(Number(year)), [year]);
+
+  const schedules = useMemo(() => {
+    const rows = [];
+    sundays.forEach((date, weekIndex) => {
+      data.groups.forEach((group) => {
+        const assignments = POSTS.map((post, postIndex) => ({
+          post,
+          name: group.members[(postIndex + weekIndex) % 4] || "Não definido",
+        }));
+        rows.push({ date, weekIndex, group, assignments });
+      });
+    });
+    return rows.filter((row) => {
+      const groupOk = groupFilter === "all" || String(row.group.id) === groupFilter;
+      const nameOk = !nameFilter.trim() || row.assignments.some((a) => a.name.toLowerCase().includes(nameFilter.trim().toLowerCase()));
+      const dateOk = !dateFilter || dateKey(row.date) === dateFilter;
+      return groupOk && nameOk && dateOk;
+    });
+  }, [sundays, data, groupFilter, nameFilter, dateFilter]);
+
+  function login(e) {
+    e.preventDefault();
+    if (password === "2580") {
+      setAdmin(true);
+      setShowLogin(false);
+      setPassword("");
+      setLoginError("");
+    } else {
+      setLoginError("Senha incorreta.");
+    }
+  }
+
+  function startEdit(group) {
+    setEditingGroup(group.id);
+    setDraftMembers([...group.members]);
+  }
+
+  function saveGroup() {
+    if (draftMembers.some((name) => !name.trim())) return;
+    setData((prev) => ({
+      ...prev,
+      groups: prev.groups.map((g) => g.id === editingGroup ? { ...g, members: draftMembers.map((n) => n.trim()) } : g),
+    }));
+    setEditingGroup(null);
+  }
+
+  function clearMember(groupId, index) {
+    setData((prev) => ({
+      ...prev,
+      groups: prev.groups.map((g) => g.id === groupId ? { ...g, members: g.members.map((m, i) => i === index ? "Não definido" : m) } : g),
+    }));
+  }
+
+  function exportJson() {
+    const payload = { app: "Escala de Porteiros CCB", version: 1, exportedAt: new Date().toISOString(), selectedYear: Number(year), ...data };
+    downloadBlob(JSON.stringify(payload, null, 2), "application/json", `escala-porteiros-${year}.json`);
+  }
+
+  function importJson(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        if (!Array.isArray(parsed.groups) || parsed.groups.length !== 3) throw new Error();
+        setData({ congregation: parsed.congregation || initialData.congregation, groups: parsed.groups });
+        if (parsed.selectedYear) setYear(Number(parsed.selectedYear));
+      } catch {
+        alert("JSON inválido ou incompatível com o app.");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  }
+
+  function exportExcel() {
+    const rows = schedules.flatMap((row) => row.assignments.map((a) => [formatDate(row.date), row.group.name, a.post, a.name]));
+    const xmlRows = [["Data", "Grupo", "Posto", "Porteiro"], ...rows]
+      .map((r) => `<Row>${r.map((c) => `<Cell><Data ss:Type="String">${escapeXml(c)}</Data></Cell>`).join("")}</Row>`)
+      .join("");
+    const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Escala ${year}"><Table>${xmlRows}</Table></Worksheet></Workbook>`;
+    downloadBlob(xml, "application/vnd.ms-excel", `escala-porteiros-${year}.xls`);
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <header className="bg-emerald-950 text-white shadow-lg">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-white/10 p-3"><CalendarDays className="h-7 w-7" /></div>
+            <div><h1 className="text-xl font-bold sm:text-2xl">Escala de Porteiros</h1><p className="text-sm text-emerald-100">Congregação Cristã no Brasil</p></div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setShowLogin(true)} className="rounded-xl"><Lock className="mr-2 h-4 w-4" />{admin ? "ADM ativo" : "Entrar no ADM"}</Button>
+            {admin && <Button variant="outline" onClick={() => setAdmin(false)} className="rounded-xl border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"><LogOut className="mr-2 h-4 w-4" />Sair</Button>}
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><Filter className="h-5 w-5 text-emerald-700" />Filtros e exportação</CardTitle></CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div><Label>Ano</Label><Input type="number" min="2020" max="2100" value={year} onChange={(e) => setYear(e.target.value)} /></div>
+            <div><Label>Grupo</Label><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}><option value="all">Todos os grupos</option>{data.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+            <div><Label>Nome</Label><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><Input className="pl-9" placeholder="Buscar porteiro" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} /></div></div>
+            <div><Label>Data</Label><Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} /></div>
+            <div className="flex flex-wrap gap-2 md:col-span-2 lg:col-span-4">
+              <Button onClick={exportExcel} className="rounded-xl bg-emerald-700 hover:bg-emerald-800"><Download className="mr-2 h-4 w-4" />Exportar Excel</Button>
+              <Button onClick={exportJson} variant="outline" className="rounded-xl"><Download className="mr-2 h-4 w-4" />Exportar JSON</Button>
+              {admin && <label className="inline-flex h-10 cursor-pointer items-center rounded-xl border bg-white px-4 text-sm font-medium hover:bg-slate-50"><Upload className="mr-2 h-4 w-4" />Importar JSON<input type="file" accept="application/json,.json" onChange={importJson} className="hidden" /></label>}
+            </div>
+          </CardContent>
+        </Card>
+
+        {admin && (
+          <Card className="rounded-2xl border-emerald-200 shadow-sm">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-5 w-5 text-emerald-700" />Administração dos porteiros</CardTitle></CardHeader>
+            <CardContent className="grid gap-4 lg:grid-cols-3">
+              {data.groups.map((group) => (
+                <div key={group.id} className="rounded-2xl border bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between"><h3 className="font-bold">{group.name}</h3><Button size="sm" variant="outline" onClick={() => startEdit(group)}><Pencil className="mr-1 h-4 w-4" />Editar</Button></div>
+                  <div className="space-y-2">{group.members.map((m, i) => <div key={i} className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm shadow-sm"><span>{m}</span><button title="Excluir porteiro" onClick={() => clearMember(group.id, i)} className="text-red-600 hover:text-red-800"><Trash2 className="h-4 w-4" /></button></div>)}</div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex items-center justify-between"><div><h2 className="text-xl font-bold">Escala de {year}</h2><p className="text-sm text-slate-500">{schedules.length} combinações de domingo e grupo encontradas</p></div><div className="hidden items-center gap-2 text-sm text-slate-500 sm:flex"><Eye className="h-4 w-4" />Modo de visualização</div></div>
+
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {schedules.map((row) => (
+            <Card key={`${dateKey(row.date)}-${row.group.id}`} className="overflow-hidden rounded-2xl border-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="bg-emerald-800 px-5 py-4 text-white"><div className="flex items-center justify-between"><h3 className="text-lg font-bold">{row.group.name}</h3><span className="rounded-full bg-white/15 px-3 py-1 text-xs">Domingo</span></div><p className="mt-1 text-sm text-emerald-100">{formatDate(row.date)}</p></div>
+              <CardContent className="grid grid-cols-2 gap-3 p-4">
+                {row.assignments.map((a) => <div key={a.post} className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{a.post}</p><p className="mt-1 font-semibold">{a.name}</p></div>)}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {!schedules.length && <div className="rounded-2xl bg-white p-10 text-center text-slate-500">Nenhuma escala encontrada com os filtros informados.</div>}
+      </main>
+
+      {showLogin && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4">
+          <form onSubmit={login} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-emerald-100 p-3 text-emerald-800"><Lock className="h-5 w-5" /></div><div><h2 className="font-bold">Acesso administrativo</h2><p className="text-sm text-slate-500">Informe a senha para editar.</p></div></div>
+            <Label>Senha</Label><Input autoFocus type="password" inputMode="numeric" value={password} onChange={(e) => setPassword(e.target.value)} />
+            {loginError && <p className="mt-2 text-sm text-red-600">{loginError}</p>}
+            <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setShowLogin(false); setLoginError(""); }}>Cancelar</Button><Button type="submit" className="bg-emerald-700 hover:bg-emerald-800">Entrar</Button></div>
+          </form>
+        </div>
+      )}
+
+      {editingGroup !== null && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-bold">Editar {data.groups.find((g) => g.id === editingGroup)?.name}</h2>
+            <p className="mb-4 text-sm text-slate-500">Cadastre os quatro porteiros. O sistema alternará automaticamente os postos a cada domingo.</p>
+            <div className="space-y-3">{draftMembers.map((name, index) => <div key={index}><Label>{POSTS[index]}</Label><Input value={name} onChange={(e) => setDraftMembers((prev) => prev.map((n, i) => i === index ? e.target.value : n))} /></div>)}</div>
+            <div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={() => setEditingGroup(null)}>Cancelar</Button><Button onClick={saveGroup} className="bg-emerald-700 hover:bg-emerald-800"><Save className="mr-2 h-4 w-4" />Salvar grupo</Button></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
