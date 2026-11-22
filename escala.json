@@ -1,0 +1,31 @@
+{
+  "grupos": [
+    {
+      "nome": "Grupo 1",
+      "p": [
+        "Rodrigo",
+        "Cazé",
+        "Willian",
+        "Claudeci"
+      ]
+    },
+    {
+      "nome": "Grupo 2",
+      "p": [
+        "Porteiro 1",
+        "Porteiro 2",
+        "Porteiro 3",
+        "Porteiro 4"
+      ]
+    },
+    {
+      "nome": "Grupo 3",
+      "p": [
+        "Porteiro 1",
+        "Porteiro 2",
+        "Porteiro 3",
+        "Porteiro 4"
+      ]
+    }
+  ]
+}
