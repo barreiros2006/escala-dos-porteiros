@@ -1,13 +1,13 @@
 /* Service Worker - Escala de Porteiros CCB
    Rede primeiro, sem usar o cache HTTP do navegador.
    O cache local só é usado quando estiver sem internet. */
-const CACHE = "escala-ccb-v12";
+const CACHE = "escala-ccb-v13";
 const ARQUIVOS = [
   "./",
   "./index.html",
-  "./style.css?v=12",
-  "./xlsx.js?v=12",
-  "./app.js?v=12",
+  "./style.css?v=13",
+  "./xlsx.js?v=13",
+  "./app.js?v=13",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",

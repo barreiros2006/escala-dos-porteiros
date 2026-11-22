@@ -7,14 +7,18 @@
   const SENHA_ADM = "2580";
   const CHAVE_LOCAL = "ccb-escala-porteiros-v6";
   const CHAVES_ANTIGAS = ["ccb-porteiros-v3", "ccb-escala-porteiros-v2", "ccb-escala-porteiros-v1"];
-  // Domingo de referência do rodízio: neste dia cada grupo usa a ordem cadastrada.
-  // O rodízio continua sem interrupção de um ano para o outro.
-  const DOMINGO_REFERENCIA = new Date(2027, 0, 3, 12);
-  const UM_DIA = 24 * 60 * 60 * 1000;
+
+  // Um grupo por domingo, em revezamento:
+  // 04/01/2026 Grupo 1, 11/01/2026 Grupo 2, 18/01/2026 Grupo 3, 25/01/2026 Grupo 1...
+  // A ordem cadastrada no ADM vale para o primeiro domingo de cada grupo.
+  // A cada vez que o grupo serve, os porteiros mudam de posição.
+  // O revezamento continua sem interrupção de um ano para o outro.
+  const DOMINGO_REFERENCIA = new Date(2026, 0, 4, 12);
+  const UMA_SEMANA = 7 * 24 * 60 * 60 * 1000;
 
   const PADRAO = {
     app: "Escala de Porteiros CCB",
-    versao: 10,
+    versao: 13,
     atualizadoEm: null,
     grupos: [
       { id: 1, nome: "Grupo 1", porteiros: ["", "", "", ""] },
@@ -90,8 +94,7 @@
     if (!/[ÃÂ]/.test(t)) return t;
     try {
       const bytes = Uint8Array.from(t, (c) => c.charCodeAt(0) & 0xff);
-      const r = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      return r;
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
       return t;
     }
@@ -110,6 +113,8 @@
   function dataBR(d) {
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   }
+
+  const modulo = (n, m) => ((n % m) + m) % m;
 
   // Sempre posiciona o app no ano e mês atuais.
   function irParaMesAtual() {
@@ -218,22 +223,27 @@
     return lista;
   }
 
-  function deslocamento(data) {
-    const semanas = Math.round((data - DOMINGO_REFERENCIA) / (7 * UM_DIA));
-    return ((semanas % 4) + 4) % 4;
+  // Define qual grupo serve no domingo e quantas posições os porteiros avançam.
+  function revezamento(data) {
+    const semanas = Math.round((data - DOMINGO_REFERENCIA) / UMA_SEMANA);
+    return {
+      grupo: modulo(semanas, 3),
+      deslocamento: modulo(Math.floor(semanas / 3), 4),
+    };
   }
 
-  // A cada domingo, cada porteiro muda de posição.
+  // Primeiro domingo de cada grupo (ordem cadastrada).
+  function primeiroDomingo(indiceGrupo) {
+    return new Date(DOMINGO_REFERENCIA.getTime() + indiceGrupo * UMA_SEMANA);
+  }
+
   function montarEscala(ano) {
-    const linhas = [];
-    domingosDoAno(ano).forEach((data) => {
-      const s = deslocamento(data);
-      dados.grupos.forEach((g) => {
-        const postos = POSTOS.map((posto, i) => ({ posto, nome: g.porteiros[(i + s) % 4] || "" }));
-        linhas.push({ data, grupo: g, postos });
-      });
+    return domingosDoAno(ano).map((data) => {
+      const r = revezamento(data);
+      const g = dados.grupos[r.grupo];
+      const postos = POSTOS.map((posto, i) => ({ posto, nome: g.porteiros[(i + r.deslocamento) % 4] || "" }));
+      return { data, grupo: g, postos };
     });
-    return linhas;
   }
 
   function escalaFiltrada() {
@@ -257,7 +267,7 @@
     ui.titulo.textContent = ui.mes.value === ""
       ? `Escala de ${ano}`
       : `Escala de ${MESES[Number(ui.mes.value)]} de ${ano}`;
-    ui.contador.textContent = `${lista.length} ${lista.length === 1 ? "escala encontrada" : "escalas encontradas"}`;
+    ui.contador.textContent = `${lista.length} ${lista.length === 1 ? "domingo encontrado" : "domingos encontrados"}`;
     atualizarOrigem();
 
     ui.lista.innerHTML = lista.map((l) => `
@@ -291,7 +301,7 @@
     ui.gruposAdm.innerHTML = dados.grupos.map((g, gi) => `
       <div class="grupo-adm">
         <h3>${escHtml(g.nome)}</h3>
-        <small>Ordem inicial (domingo ${dataBR(DOMINGO_REFERENCIA)})</small>
+        <small>Ordem inicial (domingo ${dataBR(primeiroDomingo(gi))})</small>
         ${g.porteiros.map((nome, pi) => `
           <div class="linha-porteiro">
             <label>${POSTOS[pi]}
@@ -362,7 +372,6 @@
   /* ===== Exportação e importação ===== */
   function exportarJson() {
     const payload = { ...dados, atualizadoEm: dados.atualizadoEm || new Date().toISOString() };
-    // UTF-8 explícito para manter os acentos corretos no GitHub.
     baixar(JSON.stringify(payload, null, 2), "application/json;charset=utf-8", "escala.json");
     aviso("Arquivo escala.json gerado. Substitua o escala.json da pasta do app no GitHub.", 6000);
   }
@@ -412,7 +421,6 @@
     ui.nome.addEventListener("input", render);
     ui.data.addEventListener("change", () => {
       if (ui.data.value) {
-        // Ajusta ano e mês para a data escolhida.
         ui.ano.value = Number(ui.data.value.slice(0, 4));
         ui.mes.value = String(Number(ui.data.value.slice(5, 7)) - 1);
       }
@@ -510,7 +518,7 @@
       mostrarErro(err);
     }
     irParaMesAtual();
-    render(); // mostra o mês atual imediatamente
+    render();
 
     const local = lerLocal();
     const arquivo = await lerArquivoSite();
