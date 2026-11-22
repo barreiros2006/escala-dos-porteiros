@@ -293,7 +293,6 @@
     modoAdm = true;
     sessionStorage.setItem("ccb-adm", "1");
     ui.painelAdm.classList.remove("oculto");
-    ui.lblImportar.classList.remove("oculto");
     ui.btnSair.classList.remove("oculto");
     ui.btnAdm.textContent = "ADM ativo";
     renderAdm();
@@ -303,7 +302,6 @@
     modoAdm = false;
     sessionStorage.removeItem("ccb-adm");
     ui.painelAdm.classList.add("oculto");
-    ui.lblImportar.classList.add("oculto");
     ui.btnSair.classList.add("oculto");
     ui.btnAdm.textContent = "Modo ADM";
   }

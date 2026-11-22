@@ -80,7 +80,7 @@ body {
 .painel-titulo h2 { margin: 0 0 4px; font-size: 19px; }
 .painel-titulo p { margin: 0; color: var(--cinza); font-size: 14px; }
 
-.filtros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.filtros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; }
 label { display: grid; gap: 6px; font-weight: 700; font-size: 14px; }
 input, select {
   width: 100%;
@@ -105,6 +105,7 @@ input:focus, select:focus { outline: 3px solid rgba(16, 185, 129, .25); border-c
 .grupo-adm small { color: var(--cinza); }
 .linha-porteiro { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin-top: 10px; }
 .linha-porteiro .btn { min-height: 42px; padding: 8px 12px; }
+.exportacao { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--borda); }
 .dica { margin: 14px 0 0; padding: 12px; background: #ecfdf5; border-radius: 10px; color: #065f46; font-size: 14px; }
 
 /* Escala */
