@@ -86,17 +86,22 @@
     return saida;
   }
 
-  function criar(nomePlanilha, linhas, larguras) {
+  /**
+   * linhasCabecalho: índices das linhas que usam o estilo de cabeçalho (padrão: só a primeira).
+   */
+  function criar(nomePlanilha, linhas, larguras, linhasCabecalho) {
+    const cabecalhos = new Set(linhasCabecalho && linhasCabecalho.length ? linhasCabecalho : [0]);
+    const congelar = cabecalhos.size === 1 && cabecalhos.has(0);
     const nomeAba = esc(String(nomePlanilha).replace(/[\\/?*[\]:]/g, " ").slice(0, 31));
     const cols = (larguras || []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
     const rows = linhas.map((linha, r) => {
-      const estilo = r === 0 ? ' s="1"' : ' s="2"';
+      const estilo = cabecalhos.has(r) ? ' s="1"' : ' s="2"';
       const celulas = linha.map((v, c) => `<c r="${coluna(c)}${r + 1}" t="inlineStr"${estilo}><is><t xml:space="preserve">${esc(v)}</t></is></c>`).join("");
       return `<row r="${r + 1}">${celulas}</row>`;
     }).join("");
 
     const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rows}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">${congelar ? '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' : ""}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rows}</sheetData></worksheet>`;
 
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF047857"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFCBD5E1"/></left><right style="thin"><color rgb="FFCBD5E1"/></right><top style="thin"><color rgb="FFCBD5E1"/></top><bottom style="thin"><color rgb="FFCBD5E1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;

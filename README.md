@@ -12,8 +12,9 @@
 
 ## Regras
 - O app sempre abre no ano e mês atuais.
-- Um grupo por domingo, em revezamento: Grupo 1 (04/01/2026), Grupo 2 (11/01/2026), Grupo 3 (18/01/2026), e assim por diante.
-- 4 porteiros por grupo.
-- Cada vez que o grupo serve, os porteiros mudam de posição (Pedido de Oração, Átrio, Porta do Meio, Banheiro).
-- A ordem cadastrada no ADM vale para o primeiro domingo de cada grupo (04/01, 11/01 e 18/01/2026). O revezamento continua sem interrupção entre os anos.
+- Todos os domingos do ano são gerados automaticamente.
+- 3 grupos, 4 porteiros por grupo.
+- Um grupo por domingo, em revezamento contínuo. Ponto fixo: 22/11/2026 = Grupo 1; 29/11 Grupo 2; 06/12 Grupo 3; 13/12 Grupo 1, e assim por diante.
+- A cada domingo os porteiros mudam de posição (Pedido de Oração, Átrio, Porta Meio, Banheiro).
+- O rodízio usa a ordem cadastrada no domingo 04/01/2026 como referência e continua entre os anos.
 - Exportar Excel, Exportar JSON e Importar JSON ficam somente no Modo ADM.
