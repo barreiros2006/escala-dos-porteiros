@@ -24,7 +24,19 @@
   };
 
   /* ===== Elementos ===== */
-  const $ = (id) => document.getElementById(id);
+  // Garante o filtro de mês mesmo se o index.html for de uma versão antiga.
+  (function garantirFiltroMes() {
+    if (document.getElementById("filtroMes")) return;
+    const ano = document.getElementById("filtroAno");
+    const label = document.createElement("label");
+    label.innerHTML = 'Mês<select id="filtroMes"><option value="">Todos os meses</option>' +
+      MESES.map((m, i) => `<option value="${i}">${m}</option>`).join("") + "</select>";
+    if (ano && ano.closest("label")) ano.closest("label").after(label);
+    else document.body.appendChild(label);
+  })();
+
+  // Nunca quebra o app se algum elemento não existir no HTML.
+  const $ = (id) => document.getElementById(id) || document.createElement(id.startsWith("filtro") ? "input" : "div");
   const ui = {
     ano: $("filtroAno"),
     mes: $("filtroMes"),
@@ -470,8 +482,21 @@
   }
 
   /* ===== Início ===== */
+  function mostrarErro(err) {
+    const caixa = document.getElementById("vazio");
+    if (caixa) {
+      caixa.textContent = "Erro ao carregar a escala: " + (err && err.message ? err.message : err) + ". Recarregue a página (Ctrl + F5).";
+      caixa.classList.remove("oculto");
+    }
+    console.error(err);
+  }
+
   async function iniciar() {
-    ligarEventos();
+    try {
+      ligarEventos();
+    } catch (err) {
+      mostrarErro(err);
+    }
     irParaMesAtual();
     render(); // mostra o mês atual imediatamente
 
@@ -494,5 +519,5 @@
     registrarServiceWorker();
   }
 
-  iniciar();
+  iniciar().catch(mostrarErro);
 })();

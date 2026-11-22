@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=8">
   <title>Escala de Porteiros</title>
 </head>
 <body>
@@ -35,11 +35,28 @@
     <section class="painel">
       <div class="painel-titulo">
         <h2>Filtros</h2>
-        <button id="btnLimpar" type="button" class="link">Limpar filtros</button>
+        <button id="btnLimpar" type="button" class="link">Voltar para o mês atual</button>
       </div>
       <div class="filtros">
         <label>Ano
           <input id="filtroAno" type="number" min="2020" max="2100" inputmode="numeric">
+        </label>
+        <label>Mês
+          <select id="filtroMes">
+            <option value="">Todos os meses</option>
+            <option value="0">Janeiro</option>
+            <option value="1">Fevereiro</option>
+            <option value="2">Março</option>
+            <option value="3">Abril</option>
+            <option value="4">Maio</option>
+            <option value="5">Junho</option>
+            <option value="6">Julho</option>
+            <option value="7">Agosto</option>
+            <option value="8">Setembro</option>
+            <option value="9">Outubro</option>
+            <option value="10">Novembro</option>
+            <option value="11">Dezembro</option>
+          </select>
         </label>
         <label>Grupo
           <select id="filtroGrupo">
@@ -109,7 +126,7 @@
 
   <div id="toast" class="toast oculto" role="status" aria-live="polite"></div>
 
-  <script src="xlsx.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="xlsx.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
